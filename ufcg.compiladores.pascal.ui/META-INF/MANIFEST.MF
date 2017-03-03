@@ -1,0 +1,25 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: ufcg.compiladores.pascal.ui
+Bundle-Vendor: My Company
+Bundle-Version: 1.0.0.qualifier
+Bundle-SymbolicName: ufcg.compiladores.pascal.ui; singleton:=true
+Bundle-ActivationPolicy: lazy
+Require-Bundle: ufcg.compiladores.pascal,
+ ufcg.compiladores.pascal.ide,
+ org.eclipse.xtext.ui,
+ org.eclipse.xtext.ui.shared,
+ org.eclipse.xtext.ui.codetemplates.ui,
+ org.eclipse.ui.editors;bundle-version="3.5.0",
+ org.eclipse.ui.ide;bundle-version="3.5.0",
+ org.eclipse.ui,
+ org.eclipse.compare,
+ org.eclipse.xtext.builder,
+ org.eclipse.xtend.lib;resolution:=optional,
+ org.eclipse.xtext.xbase.lib
+Import-Package: org.apache.log4j
+Bundle-RequiredExecutionEnvironment: JavaSE-1.8
+Export-Package: org.xtext.ufcg.compiladores.ui.contentassist,
+ org.xtext.ufcg.compiladores.ui.quickfix,
+ ufcg.compiladores.pascal.ui.internal
+Bundle-Activator: ufcg.compiladores.pascal.ui.internal.PascalActivator
