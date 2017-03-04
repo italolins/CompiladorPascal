@@ -144,7 +144,32 @@ goto_statement:
 ;
 
 structured_statement: 
-	conditional=conditional_statement // Para o escopo, somento condicional
+	compound=compound_statement
+	| repetitive=repetitive_statement
+	| conditional=conditional_statement // Para o escopo, somento condicional funciona
+	| with_stt=with_statement
+;
+
+compound_statement:
+	"begin" stmt_seq=statement_sequence "end"
+;
+
+repetitive_statement:
+	while=while_statement
+	| repeat=repeat_statement
+	| for=for_statement
+;
+
+while_statement:
+	"while" expression=expression "do" statement=statement
+;
+
+repeat_statement:
+	"repeat" stmt_seq=statement_sequence "until" expression=expression
+;
+
+for_statement:
+	"for" initID=ID ":=" expressionInit=expression ("to" | "downto") expressionFin=expression "do" stmt=statement
 ;
 
 conditional_statement: 
@@ -153,6 +178,10 @@ conditional_statement:
 
 if_statement:
 	"if" expression=expression "then" ifStatement=statement ( "else" elseStatement=statement )	?
+;
+
+with_statement:
+	"with" record=ID ("," records+=ID)* "do" stmt=statement
 ;
 
 // Expressions

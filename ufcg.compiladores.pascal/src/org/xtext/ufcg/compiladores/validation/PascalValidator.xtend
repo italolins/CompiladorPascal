@@ -34,43 +34,41 @@ import org.xtext.ufcg.compiladores.pascal.type_definition
 import org.xtext.ufcg.compiladores.pascal.variable
 import org.xtext.ufcg.compiladores.pascal.variable_section
 
-/**
- * This class contains custom validation rules. 
- * 
- * See https://www.eclipse.org/Xtext/documentation/303_runtime_concepts.html#validation
- */
+ @SuppressWarnings("all")
 class PascalValidator extends AbstractPascalValidator {
 	
-	public static final Map<String, Map<String, Object>> artefacts = new HashMap<String, Map<String, Object>>();
+	// Tipos basicos
+	
+	private final String NIL = "nil";
+	private final String RECORD = "record";
+	private final String CHAR = "char";
+	private final String BOOLEAN = "boolean";
+	private final String INTEGER = "integer";
+	private final String REAL = "real";
+	private final String POINTER = "^";
+	private final String ARRAY = "array of ";
 
+	
+	// Mensagens
+	
+	private final String UNDEFINED_TYPE_MESSAGE = "Undefined type";
+	private final String CANNOT_CONVERT_MESSAGE = "Cannot convert ";
+	private final String TO_MESSAGE = " to ";
+	
+	// inicializando a tabela de simbolos
+	public static final Map<String, Map<String, Object>> tabela_de_simbolos = new HashMap<String, Map<String, Object>>();
+
+
+	// classe responsavel pela manipulacao dos erros
 	private final Map<EObject, Set<Error>> errorList = new AdaptativeHashMap<EObject, Error>();
+	// classe responsavel pela manipulacao das variaveis
 	private final Map<block, Set<Variable>> variables = new AdaptativeHashMap<block, Variable>();
+	// classe responsavel pela manipulacao de procedures
 	private final Map<block, Set<Procedure>> abstractions = new AdaptativeHashMap<block, Procedure>(APIProvider.procedures);
+	// classe responsavel pela manipulacao de tipos
 	private final Map<block, Set<Type>> types = new AdaptativeHashMap<block, Type>(APIProvider.types);
+	// classe responsavel pela manipulacao de comparacoes
 	private final Map<EObject, Type> calculatedTypes = new HashMap<EObject, Type>();
-	 
-	 
-	//TODO: SECTION
-	//-----------------------------------------------------------------
-	// COMMUNICATION WITH GENERATOR
-	//-----------------------------------------------------------------
-	
-	@Check
-	def fillArtefacts(program p) {
-		var name = p.heading.name;
-		if (!artefacts.containsKey(name)) {
-			artefacts.put(name, new HashMap<String, Object>());
-			artefacts.get(name).put("variables", variables);
-			artefacts.get(name).put("abstractions", abstractions);
-			artefacts.get(name).put("types", types);
-			artefacts.get(name).put("calculatedTypes", calculatedTypes);
-		}	
-	}
-	
-	//TODO: SECTION
-	//-----------------------------------------------------------------
-	// UTILITARY FUNCTIONS
-	//-----------------------------------------------------------------
  
 	def static <T extends Element> search(Set<T> elements, T key) {
 		for (T t : elements) {
@@ -118,7 +116,6 @@ class PascalValidator extends AbstractPascalValidator {
 		} 
 		container.put(b, newSet);
 	}
-	
 	def getParameters(block b, function_designator f) {
 		var parameters = new ArrayList<Variable>();
 		if (f.expressions != null) {
@@ -137,24 +134,19 @@ class PascalValidator extends AbstractPascalValidator {
 		return new Procedure(name, parameters);	
 	}
 	
-	//TODO: SECTION
-	//-----------------------------------------------------------------
-	// TYPE INFERER FUNCTIONS
-	//-----------------------------------------------------------------
-	
 	def String getRealType(block b, String type) {
 		var foundType = search(types.get(b), new Type(type));
 		if (foundType != null) {
-			return foundType.realType;
+			return foundType.getRealType;
 		}	
 		return type;
 	}
 	
 	def Type getType(block b, String type) {
 		if (type == null) return null;
-		if (type.length > 1 && type.substring(0, 1).equals("^")) {
+		if (type.length > 1 && type.substring(0, 1).equals(POINTER)) {
 			return new ComposedType(getType(b, type.substring(1)), ComposedTypeKind.POINTER);
-		} else if (type.length > 9 && type.substring(0, 9).equals("array of ")) {
+		} else if (type.length > 9 && type.substring(0, 9).equals(ARRAY)) {
 			return new ComposedType(getType(b, type.substring(9)), ComposedTypeKind.ARRAY);
 		}
 		return new Type(type, false, getRealType(b, type));	
@@ -165,14 +157,14 @@ class PascalValidator extends AbstractPascalValidator {
 	}
 	
 	def Type getType(block b, type t) {  
-		var Type type = new Type("nil");
+		var Type type = new Type(NIL);
 		if (t.simple != null) {
 			var simple = t.simple;
 			if (simple.subrange != null || simple.enumerated != null) {
 				type = new Type("enumerated", false, "...enumerated");
 			} else if (simple.name != null) {
 				if (search(types.get(b), new Type(simple.name)) == null) {
-					insertError(t, "Undefined type.", ErrorType.UNDEFINED_TYPE, PascalPackage.Literals.TYPE__SIMPLE);
+					insertError(t, UNDEFINED_TYPE_MESSAGE, ErrorType.UNDEFINED_TYPE, PascalPackage.Literals.TYPE__SIMPLE);
 				} else {
 					removeError(t, ErrorType.UNDEFINED_TYPE);
 				} 
@@ -184,7 +176,7 @@ class PascalValidator extends AbstractPascalValidator {
 			if (unpacked.array != null) {
 				type = new ComposedType(getType(b, unpacked.array.type), ComposedTypeKind.ARRAY);
 			} else if (unpacked.record != null) {
-				type = new Type("record");
+				type = new Type(RECORD);
 			} else if (unpacked.set != null) {
 				type = getType(b, unpacked.set.type);
 			} else if (unpacked.file != null) {
@@ -197,7 +189,7 @@ class PascalValidator extends AbstractPascalValidator {
 	}
 	
 	def Type getType(block b, parameter_type type) {
-		var t = new Type("nil");
+		var t = new Type(NIL);
 		if (type.array != null) {
 			var array = type.array;
 			if (array.packed != null) {
@@ -207,7 +199,7 @@ class PascalValidator extends AbstractPascalValidator {
 			}
 		} else if (type.name != null) {
 			if (search(types.get(b), new Type(type.name)) == null) {
-				insertError(type, "Undefined type.", ErrorType.UNDEFINED_TYPE, PascalPackage.Literals.PARAMETER_TYPE__NAME);
+				insertError(type, UNDEFINED_TYPE_MESSAGE, ErrorType.UNDEFINED_TYPE, PascalPackage.Literals.PARAMETER_TYPE__NAME);
 			} else {
 				removeError(type, ErrorType.UNDEFINED_TYPE);
 			}
@@ -217,30 +209,30 @@ class PascalValidator extends AbstractPascalValidator {
 	}
 	
 	def Type getType(block b, constant const) {
-		var type = new Type("nil");
+		var type = new Type(NIL);
 		if (const.name != null) {
 			var varFound = search(variables.get(b), new Variable(const.name));
 			if (varFound != null) {
 				type = varFound.varType;
 			} 
 		} else if (const.string != null) {
-			type = new ComposedType(new Type("char"), ComposedTypeKind.ARRAY);
+			type = new ComposedType(new Type(CHAR), ComposedTypeKind.ARRAY);
 		} else if (const.boolLiteral != null) {
-			type = new Type("boolean");
+			type = new Type(BOOLEAN);
 		} else if (const.nil != null) {
-			type = new Type("nil");
+			type = new Type(NIL);
 		} else if (const.number != null) {
 			if (const.number.number.integer != null) {
-				type = new Type("integer");
+				type = new Type(INTEGER);
 			} else if (const.number.number.real != null) {
-				type = new Type("real");
+				type = new Type(REAL);
 			} 
 		}
 		return type;
 	}
 	
 	def Type getType(block b, variable v) {
-		var type = new Type("nil");
+		var type = new Type(NIL);
 		var variableFound = search(variables.get(b), new Variable(v.name)); 
 		if (variableFound != null) {
 			type = variableFound.varType;
@@ -249,7 +241,7 @@ class PascalValidator extends AbstractPascalValidator {
 	} 
 	
 	def Type getType(block b, function_designator f) {
-		var type = new Type("nil");
+		var type = new Type(NIL);
 		var function = getAbstraction(b, f);
 		var abstractionFound = searchWithTypeCoersion(abstractions.get(b), function);
 		if (abstractionFound != null && abstractionFound.type == ElementType.FUNCTION) {
@@ -260,7 +252,7 @@ class PascalValidator extends AbstractPascalValidator {
 	}
 	
 	def Type getType(block b, factor f) {
-		var type = new Type("nil");
+		var type = new Type(NIL);
 		if (f.variable != null) {
 			var variableFound = search(variables.get(b), new Variable(f.variable.name));
 			if (variableFound != null) {
@@ -269,18 +261,18 @@ class PascalValidator extends AbstractPascalValidator {
 		} else if (f.number != null) {
 			var number = f.number.number;
 			if (number.integer != null) {
-				type = new Type("integer");
+				type = new Type(INTEGER);
 			} else if (number.real != null) {
-				type = new Type("real");
+				type = new Type(REAL);
 			}
 		} else if (f.string != null) {
-			type = new ComposedType(new Type("char"), ComposedTypeKind.ARRAY);
+			type = new ComposedType(new Type(CHAR), ComposedTypeKind.ARRAY);
 		} else if (f.set != null) {
 			type = getType(b, f.set.expressions, true); 
 		} else if (f.nil) {
-			type = new Type("nil");
+			type = new Type(NIL);
 		} else if (f.boolean != null || f.not != null) {
-			type = new Type("boolean");
+			type = new Type(BOOLEAN);
 		} else if (f.function != null) {
 			type = getType(b, f.function);
 		} else if (f.expression != null) {
@@ -310,9 +302,9 @@ class PascalValidator extends AbstractPascalValidator {
 			} else {
 				var n = obj as any_number;
 				if (n.integer != null) {
-					greatestType = TypeInferer.greater(new Type("integer"), greatestType);
+					greatestType = TypeInferer.greater(new Type(INTEGER), greatestType);
 				} else {
-					greatestType = TypeInferer.greater(new Type("real"), greatestType);
+					greatestType = TypeInferer.greater(new Type(REAL), greatestType);
 				}
 			}
 		}
@@ -321,9 +313,9 @@ class PascalValidator extends AbstractPascalValidator {
 	}
 	
 	def Type getType(block b, expression expr) {
-		var t = new Type("nil");
+		var t = new Type(NIL);
 		if (expr.operators != null && !expr.operators.empty) {
-			t = new Type("boolean");
+			t = new Type(BOOLEAN);
 		} else {
 			var Type greatestType = null;
 			for (simple_expression e : expr.expressions) {
@@ -344,7 +336,7 @@ class PascalValidator extends AbstractPascalValidator {
 			if (isCohese) {
 				if (greatestType != null && TypeInferer.getTypeWeight(greatestType) < 0 && TypeInferer.getTypeWeight(type) >= 0 || 
 					TypeInferer.getTypeWeight(type) < 0 && TypeInferer.getTypeWeight(greatestType) >= 0) {
-					insertError(expr, "Cannot convert " + type +  " to " + greatestType + ".", ErrorType.TYPE_COHESION, PascalPackage.Literals.EXPRESSION_LIST__EXPRESSIONS);
+					insertError(expr, CANNOT_CONVERT_MESSAGE + type +  TO_MESSAGE + greatestType + ".", ErrorType.TYPE_COHESION, PascalPackage.Literals.EXPRESSION_LIST__EXPRESSIONS);
 					hasErrors = true;
 				} 
 			}
@@ -499,7 +491,7 @@ class PascalValidator extends AbstractPascalValidator {
 		var returnType = heading.resultType;
 		if (returnType != null) {  
 			if (search(types.get(b), new Type(returnType)) == null) {
-				insertError(heading, "Undefined type.", ErrorType.UNDEFINED_TYPE, PascalPackage.Literals.ABSTRACTION_HEADING__RESULT_TYPE);
+				insertError(heading, UNDEFINED_TYPE_MESSAGE, ErrorType.UNDEFINED_TYPE, PascalPackage.Literals.ABSTRACTION_HEADING__RESULT_TYPE);
 			} else {
 				removeError(heading, ErrorType.UNDEFINED_TYPE);
 			} 
@@ -540,7 +532,7 @@ class PascalValidator extends AbstractPascalValidator {
 		clear(b, ElementType.TYPE, types);
 		if (b.declaration.type_def != null) {
 			for (type_definition t : b.declaration.type_def.types) {
-				addElement(b, new Type(t.name, false, getType(b, t.type).realType), types, t, PascalPackage.Literals.TYPE_DEFINITION__NAME);
+				addElement(b, new Type(t.name, false, getType(b, t.type).getRealType), types, t, PascalPackage.Literals.TYPE_DEFINITION__NAME);
 			}
 		}	 
 	}
@@ -621,11 +613,6 @@ class PascalValidator extends AbstractPascalValidator {
 	} 
 	
 	
-	//TODO: SECTION
-	//-----------------------------------------------------------------
-	// STATEMENTS VALIDATION FUNCTIONS
-	//-----------------------------------------------------------------
-	
 	def void checkAbstractionCall(block b, function_designator function, boolean functionOnly) {
 		if (function.expressions != null) {
 			for (expression e : function.expressions.expressions) {
@@ -649,8 +636,8 @@ class PascalValidator extends AbstractPascalValidator {
 		} else if (f.function != null) {	
 			checkAbstractionCall(b, f.function, true);
 		} else if (f.not != null) {
-			if (!getType(b, f.not).realType.toLowerCase.equals("boolean")) {
-				insertError(f, "Cannot convert " + getType(b, f.not) + " to boolean.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.FACTOR__NOT);
+			if (!getType(b, f.not).getRealType.toLowerCase.equals(BOOLEAN)) {
+				insertError(f, CANNOT_CONVERT_MESSAGE + getType(b, f.not) + " to boolean.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.FACTOR__NOT);
 			} else {
 				removeError(f, ErrorType.TYPE_CONVERSION_ERROR);
 			}
@@ -678,14 +665,14 @@ class PascalValidator extends AbstractPascalValidator {
 		removeError(t, ErrorType.INVALID_OPERATOR);
 		for (factor f : t.factors) {
 			if (isBoolean) {
-				if (!getType(b, f).realType.toLowerCase.equals("boolean")) {
-					insertError(t, "Cannot convert " + getType(b, f) + " to boolean.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.TERM__FACTORS);		
+				if (!getType(b, f).getRealType.toLowerCase.equals(BOOLEAN)) {
+					insertError(t, CANNOT_CONVERT_MESSAGE + getType(b, f) + " to boolean.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.TERM__FACTORS);		
 				} else {
 					removeError(t, ErrorType.TYPE_CONVERSION_ERROR);
 				}
 			} else if (isNumeric) {
 				if (TypeInferer.getTypeWeight(getType(b, f)) == -1) {
-					insertError(t, "Cannot convert " + getType(b, f) + " to numeric.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.TERM__FACTORS);		
+					insertError(t, CANNOT_CONVERT_MESSAGE + getType(b, f) + " to numeric.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.TERM__FACTORS);		
 				} else {
 					removeError(t, ErrorType.TYPE_CONVERSION_ERROR);
 				}
@@ -721,14 +708,14 @@ class PascalValidator extends AbstractPascalValidator {
 					if (obj instanceof term) {
 						var t = obj as term;
 						if (isBoolean) {
-							if (!getType(b, t).realType.toLowerCase.equals("boolean")) {
-								insertError(s, "Cannot convert " + getType(b, t) + " to boolean.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.SIMPLE_EXPRESSION__TERMS);		
+							if (!getType(b, t).getRealType.toLowerCase.equals(BOOLEAN)) {
+								insertError(s, CANNOT_CONVERT_MESSAGE + getType(b, t) + " to boolean.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.SIMPLE_EXPRESSION__TERMS);		
 							} else {
 								removeError(s, ErrorType.TYPE_CONVERSION_ERROR);
 							}
 						} else if (isNumeric) {
 							if (TypeInferer.getTypeWeight(getType(b, t)) == -1) {
-								insertError(s, "Cannot convert " + getType(b, t) + " to numeric.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.SIMPLE_EXPRESSION__TERMS);
+								insertError(s, CANNOT_CONVERT_MESSAGE + getType(b, t) + " to numeric.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.SIMPLE_EXPRESSION__TERMS);
 							} else {
 								removeError(s, ErrorType.TYPE_CONVERSION_ERROR);
 							}
@@ -773,7 +760,7 @@ class PascalValidator extends AbstractPascalValidator {
 					var variableType = getType(b, simple.assignment.variable);
 					var expressionType = getType(b, simple.assignment.expression);
 					if (!TypeInferer.areTypesCompatibles(variableType, expressionType)) { 
-						 insertError(simple.assignment, "Cannot convert type " + expressionType + " to " + variableType + ".", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.ASSIGNMENT_STATEMENT__EXPRESSION);
+						 insertError(simple.assignment, "Cannot convert type " + expressionType + TO_MESSAGE + variableType + ".", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.ASSIGNMENT_STATEMENT__EXPRESSION);
 					} else {
 						removeError(simple.assignment, ErrorType.TYPE_CONVERSION_ERROR);
 					}
@@ -793,7 +780,7 @@ class PascalValidator extends AbstractPascalValidator {
 				if (conditional.ifStmt != null) {
 					var ifStmt = conditional.ifStmt;
 					checkExpression(b, ifStmt.expression);
-					if (!getType(b, ifStmt.expression).realType.toLowerCase.equals("boolean")) {
+					if (!getType(b, ifStmt.expression).getRealType.toLowerCase.equals(BOOLEAN)) {
 						insertError(ifStmt, "Only booleans are allowed inside a condition.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.IF_STATEMENT__EXPRESSION);
 					} else {
 						removeError(ifStmt.expression, ErrorType.TYPE_CONVERSION_ERROR);
@@ -819,13 +806,29 @@ class PascalValidator extends AbstractPascalValidator {
 	}
 	
 	
-	//TODO: SECTION
-	//-----------------------------------------------------------------
-	// INITIALIZER
-	//-----------------------------------------------------------------
+	//// Os checks estao aqui
 	
 	@Check
-	def runCheckes(block b) {
+	/*
+	 * Responsavel pelo preenchimento da tabela de simbolos pascal
+	 */
+	def preencherTabela(program prog) {
+		var name = prog.heading.name;
+		if (!tabela_de_simbolos.containsKey(name)) {
+			tabela_de_simbolos.put(name, new HashMap<String, Object>());
+			tabela_de_simbolos.get(name).put("variables", variables);
+			tabela_de_simbolos.get(name).put("abstractions", abstractions);
+			tabela_de_simbolos.get(name).put("types", types);
+			tabela_de_simbolos.get(name).put("calculatedTypes", calculatedTypes);
+		}	
+	}
+	
+	@Check
+	/*
+	 * Inicia os checks basicos do sistema
+	 * Os outros checks estao sendo chamados dentro destes testes
+	 */
+	def iniciarChecks(block b) {
 		checkTypeRedeclaration(b);
 		checkAbstractionRedeclaration(b);
 		checkConstantRedeclaration(b);

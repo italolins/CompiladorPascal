@@ -168,7 +168,46 @@
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="structured_statement">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="compound" eType="#//compound_statement"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="repetitive" eType="#//repetitive_statement"
+        containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="conditional" eType="#//conditional_statement"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="with_stt" eType="#//with_statement"
+        containment="true"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="compound_statement">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="stmt_seq" eType="#//statement_sequence"
+        containment="true"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="repetitive_statement">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="while" eType="#//while_statement"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="repeat" eType="#//repeat_statement"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="for" eType="#//for_statement"
+        containment="true"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="while_statement">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="expression" eType="#//expression"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="statement" eType="#//statement"
+        containment="true"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="repeat_statement">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="stmt_seq" eType="#//statement_sequence"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="expression" eType="#//expression"
+        containment="true"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="for_statement">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="initID" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="expressionInit" eType="#//expression"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="expressionFin" eType="#//expression"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="stmt" eType="#//statement"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="conditional_statement">
@@ -181,6 +220,13 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="ifStatement" eType="#//statement"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="elseStatement" eType="#//statement"
+        containment="true"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="with_statement">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="record" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="records" unique="false"
+        upperBound="-1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="stmt" eType="#//statement"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="expression">
