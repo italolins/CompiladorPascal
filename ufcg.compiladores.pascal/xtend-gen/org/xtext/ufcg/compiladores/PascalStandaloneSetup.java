@@ -11,6 +11,7 @@ import org.xtext.ufcg.compiladores.PascalStandaloneSetupGenerated;
 @SuppressWarnings("all")
 public class PascalStandaloneSetup extends PascalStandaloneSetupGenerated {
   public static void doSetup() {
-    new PascalStandaloneSetup().createInjectorAndDoEMFRegistration();
+    PascalStandaloneSetup _pascalStandaloneSetup = new PascalStandaloneSetup();
+    _pascalStandaloneSetup.createInjectorAndDoEMFRegistration();
   }
 }

@@ -14,6 +14,7 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.xtext.validation.Check;
 import org.eclipse.xtext.xbase.lib.Exceptions;
+import org.xtext.ufcg.compiladores.pascal.PascalFactory;
 import org.xtext.ufcg.compiladores.pascal.PascalPackage;
 import org.xtext.ufcg.compiladores.pascal.abstraction_declaration;
 import org.xtext.ufcg.compiladores.pascal.abstraction_heading;
@@ -21,11 +22,12 @@ import org.xtext.ufcg.compiladores.pascal.any_number;
 import org.xtext.ufcg.compiladores.pascal.array_type;
 import org.xtext.ufcg.compiladores.pascal.assignment_statement;
 import org.xtext.ufcg.compiladores.pascal.block;
-import org.xtext.ufcg.compiladores.pascal.conditional_statement;
+import org.xtext.ufcg.compiladores.pascal.compound_statement;
 import org.xtext.ufcg.compiladores.pascal.conformant_array_schema;
 import org.xtext.ufcg.compiladores.pascal.constant;
 import org.xtext.ufcg.compiladores.pascal.constant_definition;
 import org.xtext.ufcg.compiladores.pascal.constant_definition_part;
+import org.xtext.ufcg.compiladores.pascal.declaration_part;
 import org.xtext.ufcg.compiladores.pascal.expression;
 import org.xtext.ufcg.compiladores.pascal.expression_list;
 import org.xtext.ufcg.compiladores.pascal.factor;
@@ -33,20 +35,24 @@ import org.xtext.ufcg.compiladores.pascal.file_type;
 import org.xtext.ufcg.compiladores.pascal.formal_parameter_list;
 import org.xtext.ufcg.compiladores.pascal.formal_parameter_section;
 import org.xtext.ufcg.compiladores.pascal.function_designator;
-import org.xtext.ufcg.compiladores.pascal.if_statement;
+import org.xtext.ufcg.compiladores.pascal.identifier_list;
 import org.xtext.ufcg.compiladores.pascal.number;
 import org.xtext.ufcg.compiladores.pascal.packed_conformant_array_schema;
 import org.xtext.ufcg.compiladores.pascal.parameter_type;
 import org.xtext.ufcg.compiladores.pascal.pointer_type;
 import org.xtext.ufcg.compiladores.pascal.procedure_and_function_declaration_part;
 import org.xtext.ufcg.compiladores.pascal.program;
+import org.xtext.ufcg.compiladores.pascal.program_heading;
 import org.xtext.ufcg.compiladores.pascal.record_type;
+import org.xtext.ufcg.compiladores.pascal.repeat_statement;
+import org.xtext.ufcg.compiladores.pascal.repetitive_statement;
 import org.xtext.ufcg.compiladores.pascal.set;
 import org.xtext.ufcg.compiladores.pascal.set_type;
 import org.xtext.ufcg.compiladores.pascal.simple_expression;
 import org.xtext.ufcg.compiladores.pascal.simple_statement;
 import org.xtext.ufcg.compiladores.pascal.simple_type;
 import org.xtext.ufcg.compiladores.pascal.statement;
+import org.xtext.ufcg.compiladores.pascal.statement_part;
 import org.xtext.ufcg.compiladores.pascal.statement_sequence;
 import org.xtext.ufcg.compiladores.pascal.structured_statement;
 import org.xtext.ufcg.compiladores.pascal.structured_type;
@@ -59,6 +65,7 @@ import org.xtext.ufcg.compiladores.pascal.unpacked_structured_type;
 import org.xtext.ufcg.compiladores.pascal.value_parameter_section;
 import org.xtext.ufcg.compiladores.pascal.variable;
 import org.xtext.ufcg.compiladores.pascal.variable_declaration_part;
+import org.xtext.ufcg.compiladores.pascal.variable_identifier_list;
 import org.xtext.ufcg.compiladores.pascal.variable_parameter_section;
 import org.xtext.ufcg.compiladores.pascal.variable_section;
 import org.xtext.ufcg.compiladores.validation.APIProvider;
@@ -100,13 +107,33 @@ public class PascalValidator extends AbstractPascalValidator {
   
   private final String TO_MESSAGE = " to ";
   
+  private final String IDENTIFIER_IS_ALREADY_BEING_USED = "Identifier is already being used by a ";
+  
+  private final String WRONG_NUMBER_OF_ARGUMENTS = "Wrong number of arguments. It expected ";
+  
+  private final String FUNCTION_WAS_NOT_DECLARED = "Function was not declared.";
+  
+  private final String PROCEDURE_WAS_NOT_DECLARED = "Procedure was not declared.";
+  
+  private final String VARIABLE_IS_NOT_A_NUMBER = "Variable is not a number.";
+  
+  private final String CANNOT_CONVERT_TYPE = "Cannot convert type ";
+  
+  private final String ONLY_CONSTANTS_ARE_ALLOWED = "Only constants are allowed.";
+  
+  private final String CONSTANTS_CANNOT_BE_ASSIGNED = "Constants cannot be assigned.";
+  
+  private final String VARIABLE_WAS_NOT_DECLARED = "Variable was not declared.";
+  
+  private final String INVALID_OPERATOR_FOR_BOOLEAN = "Invalid operator for boolean.";
+  
   public final static Map<String, Map<String, Object>> tabela_de_simbolos = new HashMap<String, Map<String, Object>>();
   
-  private final Map<EObject, Set<org.xtext.ufcg.compiladores.validation.Error>> errorList = new AdaptativeHashMap<EObject, org.xtext.ufcg.compiladores.validation.Error>();
+  private final Map<EObject, Set<org.xtext.ufcg.compiladores.validation.Error>> ListaDeErros = new AdaptativeHashMap<EObject, org.xtext.ufcg.compiladores.validation.Error>();
   
   private final Map<block, Set<Variable>> variables = new AdaptativeHashMap<block, Variable>();
   
-  private final Map<block, Set<Procedure>> abstractions = new AdaptativeHashMap<block, Procedure>(APIProvider.procedures);
+  private final Map<block, Set<Procedure>> abstracoes = new AdaptativeHashMap<block, Procedure>(APIProvider.procedures);
   
   private final Map<block, Set<Type>> types = new AdaptativeHashMap<block, Type>(APIProvider.types);
   
@@ -139,9 +166,11 @@ public class PascalValidator extends AbstractPascalValidator {
     return optimal;
   }
   
-  public static Type searchByName(final Set<Type> types, final Type key) {
+  public static Type procuraPorNome(final Set<Type> types, final Type key) {
     for (final Type t : types) {
-      boolean _equals = t.name.toLowerCase().equals(key.name.toLowerCase());
+      String _lowerCase = t.name.toLowerCase();
+      String _lowerCase_1 = key.name.toLowerCase();
+      boolean _equals = _lowerCase.equals(_lowerCase_1);
       if (_equals) {
         return t;
       }
@@ -150,13 +179,13 @@ public class PascalValidator extends AbstractPascalValidator {
   }
   
   public boolean insertError(final EObject object, final String message, final ErrorType type, final EStructuralFeature feature) {
-    Set<org.xtext.ufcg.compiladores.validation.Error> _get = this.errorList.get(object);
+    Set<org.xtext.ufcg.compiladores.validation.Error> _get = this.ListaDeErros.get(object);
     org.xtext.ufcg.compiladores.validation.Error _error = new org.xtext.ufcg.compiladores.validation.Error(message, type, feature);
     return _get.add(_error);
   }
   
   public void removeError(final EObject object, final ErrorType type) {
-    Set<org.xtext.ufcg.compiladores.validation.Error> _get = this.errorList.get(object);
+    Set<org.xtext.ufcg.compiladores.validation.Error> _get = this.ListaDeErros.get(object);
     org.xtext.ufcg.compiladores.validation.Error _error = new org.xtext.ufcg.compiladores.validation.Error(type);
     _get.remove(_error);
     this.showError(object);
@@ -183,8 +212,9 @@ public class PascalValidator extends AbstractPascalValidator {
     boolean _notEquals = (!Objects.equal(_expressions, null));
     if (_notEquals) {
       int count = 0;
-      EList<expression> _expressions_1 = f.getExpressions().getExpressions();
-      for (final expression e : _expressions_1) {
+      expression_list _expressions_1 = f.getExpressions();
+      EList<expression> _expressions_2 = _expressions_1.getExpressions();
+      for (final expression e : _expressions_2) {
         {
           Type _type = this.getType(b, e);
           Variable _variable = new Variable(("arg_" + Integer.valueOf(count)), _type, false, b, ElementType.PARAMETER);
@@ -219,11 +249,13 @@ public class PascalValidator extends AbstractPascalValidator {
       return null;
     }
     if (((type.length() > 1) && type.substring(0, 1).equals(this.POINTER))) {
-      Type _type = this.getType(b, type.substring(1));
+      String _substring = type.substring(1);
+      Type _type = this.getType(b, _substring);
       return new ComposedType(_type, ComposedTypeKind.POINTER);
     } else {
       if (((type.length() > 9) && type.substring(0, 9).equals(this.ARRAY))) {
-        Type _type_1 = this.getType(b, type.substring(9));
+        String _substring_1 = type.substring(9);
+        Type _type_1 = this.getType(b, _substring_1);
         return new ComposedType(_type_1, ComposedTypeKind.ARRAY);
       }
     }
@@ -259,7 +291,9 @@ public class PascalValidator extends AbstractPascalValidator {
           } else {
             this.removeError(t, ErrorType.UNDEFINED_TYPE);
           }
-          type = this.getType(b, simple.getName());
+          String _name_2 = simple.getName();
+          Type _type_2 = this.getType(b, _name_2);
+          type = _type_2;
         }
       }
     } else {
@@ -271,25 +305,33 @@ public class PascalValidator extends AbstractPascalValidator {
         array_type _array = unpacked.getArray();
         boolean _notEquals_3 = (!Objects.equal(_array, null));
         if (_notEquals_3) {
-          Type _type_2 = this.getType(b, unpacked.getArray().getType());
-          ComposedType _composedType = new ComposedType(_type_2, ComposedTypeKind.ARRAY);
+          array_type _array_1 = unpacked.getArray();
+          org.xtext.ufcg.compiladores.pascal.type _type_3 = _array_1.getType();
+          Type _type_4 = this.getType(b, _type_3);
+          ComposedType _composedType = new ComposedType(_type_4, ComposedTypeKind.ARRAY);
           type = _composedType;
         } else {
           record_type _record = unpacked.getRecord();
           boolean _notEquals_4 = (!Objects.equal(_record, null));
           if (_notEquals_4) {
-            Type _type_3 = new Type(this.RECORD);
-            type = _type_3;
+            Type _type_5 = new Type(this.RECORD);
+            type = _type_5;
           } else {
             set_type _set = unpacked.getSet();
             boolean _notEquals_5 = (!Objects.equal(_set, null));
             if (_notEquals_5) {
-              type = this.getType(b, unpacked.getSet().getType());
+              set_type _set_1 = unpacked.getSet();
+              org.xtext.ufcg.compiladores.pascal.type _type_6 = _set_1.getType();
+              Type _type_7 = this.getType(b, _type_6);
+              type = _type_7;
             } else {
               file_type _file = unpacked.getFile();
               boolean _notEquals_6 = (!Objects.equal(_file, null));
               if (_notEquals_6) {
-                type = this.getType(b, unpacked.getFile().getType());
+                file_type _file_1 = unpacked.getFile();
+                org.xtext.ufcg.compiladores.pascal.type _type_8 = _file_1.getType();
+                Type _type_9 = this.getType(b, _type_8);
+                type = _type_9;
               }
             }
           }
@@ -298,8 +340,10 @@ public class PascalValidator extends AbstractPascalValidator {
         pointer_type _pointer = t.getPointer();
         boolean _notEquals_7 = (!Objects.equal(_pointer, null));
         if (_notEquals_7) {
-          Type _type_4 = this.getType(b, t.getPointer().getType());
-          ComposedType _composedType_1 = new ComposedType(_type_4, ComposedTypeKind.POINTER);
+          pointer_type _pointer_1 = t.getPointer();
+          org.xtext.ufcg.compiladores.pascal.type _type_10 = _pointer_1.getType();
+          Type _type_11 = this.getType(b, _type_10);
+          ComposedType _composedType_1 = new ComposedType(_type_11, ComposedTypeKind.POINTER);
           type = _composedType_1;
         }
       }
@@ -316,33 +360,39 @@ public class PascalValidator extends AbstractPascalValidator {
       packed_conformant_array_schema _packed = array.getPacked();
       boolean _notEquals_1 = (!Objects.equal(_packed, null));
       if (_notEquals_1) {
-        Type _type = this.getType(b, array.getPacked().getName());
+        packed_conformant_array_schema _packed_1 = array.getPacked();
+        String _name = _packed_1.getName();
+        Type _type = this.getType(b, _name);
         ComposedType _composedType = new ComposedType(_type, ComposedTypeKind.ARRAY);
         t = _composedType;
       } else {
         unpacked_conformant_array_schema _unpacked = array.getUnpacked();
         boolean _notEquals_2 = (!Objects.equal(_unpacked, null));
         if (_notEquals_2) {
-          Type _type_1 = this.getType(b, array.getUnpacked().getType());
-          ComposedType _composedType_1 = new ComposedType(_type_1, ComposedTypeKind.ARRAY);
+          unpacked_conformant_array_schema _unpacked_1 = array.getUnpacked();
+          parameter_type _type_1 = _unpacked_1.getType();
+          Type _type_2 = this.getType(b, _type_1);
+          ComposedType _composedType_1 = new ComposedType(_type_2, ComposedTypeKind.ARRAY);
           t = _composedType_1;
         }
       }
     } else {
-      String _name = type.getName();
-      boolean _notEquals_3 = (!Objects.equal(_name, null));
+      String _name_1 = type.getName();
+      boolean _notEquals_3 = (!Objects.equal(_name_1, null));
       if (_notEquals_3) {
         Set<Type> _get = this.types.get(b);
-        String _name_1 = type.getName();
-        Type _type_2 = new Type(_name_1);
-        Type _search = PascalValidator.<Type>search(_get, _type_2);
+        String _name_2 = type.getName();
+        Type _type_3 = new Type(_name_2);
+        Type _search = PascalValidator.<Type>search(_get, _type_3);
         boolean _equals = Objects.equal(_search, null);
         if (_equals) {
           this.insertError(type, this.UNDEFINED_TYPE_MESSAGE, ErrorType.UNDEFINED_TYPE, PascalPackage.Literals.PARAMETER_TYPE__NAME);
         } else {
           this.removeError(type, ErrorType.UNDEFINED_TYPE);
         }
-        t = this.getType(b, type.getName());
+        String _name_3 = type.getName();
+        Type _type_4 = this.getType(b, _name_3);
+        t = _type_4;
       }
     }
     return t;
@@ -359,7 +409,8 @@ public class PascalValidator extends AbstractPascalValidator {
       Variable varFound = PascalValidator.<Variable>search(_get, _variable);
       boolean _notEquals_1 = (!Objects.equal(varFound, null));
       if (_notEquals_1) {
-        type = varFound.getVarType();
+        Type _varType = varFound.getVarType();
+        type = _varType;
       }
     } else {
       String _string = const_.getString();
@@ -384,13 +435,17 @@ public class PascalValidator extends AbstractPascalValidator {
             number _number = const_.getNumber();
             boolean _notEquals_5 = (!Objects.equal(_number, null));
             if (_notEquals_5) {
-              String _integer = const_.getNumber().getNumber().getInteger();
+              number _number_1 = const_.getNumber();
+              any_number _number_2 = _number_1.getNumber();
+              String _integer = _number_2.getInteger();
               boolean _notEquals_6 = (!Objects.equal(_integer, null));
               if (_notEquals_6) {
                 Type _type_3 = new Type(this.INTEGER);
                 type = _type_3;
               } else {
-                String _real = const_.getNumber().getNumber().getReal();
+                number _number_3 = const_.getNumber();
+                any_number _number_4 = _number_3.getNumber();
+                String _real = _number_4.getReal();
                 boolean _notEquals_7 = (!Objects.equal(_real, null));
                 if (_notEquals_7) {
                   Type _type_4 = new Type(this.REAL);
@@ -413,7 +468,8 @@ public class PascalValidator extends AbstractPascalValidator {
     Variable variableFound = PascalValidator.<Variable>search(_get, _variable);
     boolean _notEquals = (!Objects.equal(variableFound, null));
     if (_notEquals) {
-      type = variableFound.getVarType();
+      Type _varType = variableFound.getVarType();
+      type = _varType;
     }
     return type;
   }
@@ -421,10 +477,12 @@ public class PascalValidator extends AbstractPascalValidator {
   public Type getType(final block b, final function_designator f) {
     Type type = new Type(this.NIL);
     Procedure function = this.getAbstraction(b, f);
-    Procedure abstractionFound = PascalValidator.searchWithTypeCoersion(this.abstractions.get(b), function);
+    Set<Procedure> _get = this.abstracoes.get(b);
+    Procedure abstractionFound = PascalValidator.searchWithTypeCoersion(_get, function);
     if (((!Objects.equal(abstractionFound, null)) && Objects.equal(abstractionFound.type, ElementType.FUNCTION))) {
       Function functionFound = ((Function) abstractionFound);
-      type = functionFound.getReturnType();
+      Type _returnType = functionFound.getReturnType();
+      type = _returnType;
     }
     return type;
   }
@@ -435,18 +493,21 @@ public class PascalValidator extends AbstractPascalValidator {
     boolean _notEquals = (!Objects.equal(_variable, null));
     if (_notEquals) {
       Set<Variable> _get = this.variables.get(b);
-      String _name = f.getVariable().getName();
-      Variable _variable_1 = new Variable(_name);
-      Variable variableFound = PascalValidator.<Variable>search(_get, _variable_1);
+      variable _variable_1 = f.getVariable();
+      String _name = _variable_1.getName();
+      Variable _variable_2 = new Variable(_name);
+      Variable variableFound = PascalValidator.<Variable>search(_get, _variable_2);
       boolean _notEquals_1 = (!Objects.equal(variableFound, null));
       if (_notEquals_1) {
-        type = variableFound.getVarType();
+        Type _varType = variableFound.getVarType();
+        type = _varType;
       }
     } else {
       number _number = f.getNumber();
       boolean _notEquals_2 = (!Objects.equal(_number, null));
       if (_notEquals_2) {
-        any_number number = f.getNumber().getNumber();
+        number _number_1 = f.getNumber();
+        any_number number = _number_1.getNumber();
         String _integer = number.getInteger();
         boolean _notEquals_3 = (!Objects.equal(_integer, null));
         if (_notEquals_3) {
@@ -471,26 +532,33 @@ public class PascalValidator extends AbstractPascalValidator {
           set _set = f.getSet();
           boolean _notEquals_6 = (!Objects.equal(_set, null));
           if (_notEquals_6) {
-            type = this.getType(b, f.getSet().getExpressions(), true);
+            set _set_1 = f.getSet();
+            expression_list _expressions = _set_1.getExpressions();
+            Type _type_3 = this.getType(b, _expressions, true);
+            type = _type_3;
           } else {
             boolean _isNil = f.isNil();
             if (_isNil) {
-              Type _type_3 = new Type(this.NIL);
-              type = _type_3;
+              Type _type_4 = new Type(this.NIL);
+              type = _type_4;
             } else {
               if (((!Objects.equal(f.getBoolean(), null)) || (!Objects.equal(f.getNot(), null)))) {
-                Type _type_4 = new Type(this.BOOLEAN);
-                type = _type_4;
+                Type _type_5 = new Type(this.BOOLEAN);
+                type = _type_5;
               } else {
                 function_designator _function = f.getFunction();
                 boolean _notEquals_7 = (!Objects.equal(_function, null));
                 if (_notEquals_7) {
-                  type = this.getType(b, f.getFunction());
+                  function_designator _function_1 = f.getFunction();
+                  Type _type_6 = this.getType(b, _function_1);
+                  type = _type_6;
                 } else {
                   expression _expression = f.getExpression();
                   boolean _notEquals_8 = (!Objects.equal(_expression, null));
                   if (_notEquals_8) {
-                    type = this.getType(b, f.getExpression());
+                    expression _expression_1 = f.getExpression();
+                    Type _type_7 = this.getType(b, _expression_1);
+                    type = _type_7;
                   }
                 }
               }
@@ -509,7 +577,8 @@ public class PascalValidator extends AbstractPascalValidator {
     for (final factor f : _factors) {
       {
         Type type = this.getType(b, f);
-        greatestType = TypeInferer.greater(type, greatestType);
+        Type _greater = TypeInferer.greater(type, greatestType);
+        greatestType = _greater;
       }
     }
     this.calculatedTypes.put(t, greatestType);
@@ -523,17 +592,20 @@ public class PascalValidator extends AbstractPascalValidator {
       if ((obj instanceof term)) {
         term t = ((term) obj);
         Type type = this.getType(b, t);
-        greatestType = TypeInferer.greater(type, greatestType);
+        Type _greater = TypeInferer.greater(type, greatestType);
+        greatestType = _greater;
       } else {
         any_number n = ((any_number) obj);
         String _integer = n.getInteger();
         boolean _notEquals = (!Objects.equal(_integer, null));
         if (_notEquals) {
           Type _type = new Type(this.INTEGER);
-          greatestType = TypeInferer.greater(_type, greatestType);
+          Type _greater_1 = TypeInferer.greater(_type, greatestType);
+          greatestType = _greater_1;
         } else {
           Type _type_1 = new Type(this.REAL);
-          greatestType = TypeInferer.greater(_type_1, greatestType);
+          Type _greater_2 = TypeInferer.greater(_type_1, greatestType);
+          greatestType = _greater_2;
         }
       }
     }
@@ -552,7 +624,8 @@ public class PascalValidator extends AbstractPascalValidator {
       for (final simple_expression e : _expressions) {
         {
           Type type = this.getType(b, e);
-          greatestType = TypeInferer.greater(type, greatestType);
+          Type _greater = TypeInferer.greater(type, greatestType);
+          greatestType = _greater;
         }
       }
       t = greatestType;
@@ -575,7 +648,8 @@ public class PascalValidator extends AbstractPascalValidator {
             hasErrors = true;
           }
         }
-        greatestType = TypeInferer.greater(type, greatestType);
+        Type _greater = TypeInferer.greater(type, greatestType);
+        greatestType = _greater;
       }
     }
     if ((!hasErrors)) {
@@ -586,15 +660,21 @@ public class PascalValidator extends AbstractPascalValidator {
   }
   
   public static Object getValue(final number num) {
-    String _integer = num.getNumber().getInteger();
+    any_number _number = num.getNumber();
+    String _integer = _number.getInteger();
     boolean _notEquals = (!Objects.equal(_integer, null));
     if (_notEquals) {
-      return Integer.valueOf(num.getNumber().getInteger());
+      any_number _number_1 = num.getNumber();
+      String _integer_1 = _number_1.getInteger();
+      return Integer.valueOf(_integer_1);
     } else {
-      String _real = num.getNumber().getReal();
+      any_number _number_2 = num.getNumber();
+      String _real = _number_2.getReal();
       boolean _notEquals_1 = (!Objects.equal(_real, null));
       if (_notEquals_1) {
-        return Double.valueOf(num.getNumber().getReal());
+        any_number _number_3 = num.getNumber();
+        String _real_1 = _number_3.getReal();
+        return Double.valueOf(_real_1);
       }
     }
     return null;
@@ -602,7 +682,8 @@ public class PascalValidator extends AbstractPascalValidator {
   
   public static boolean isNumeric(final Object obj) {
     try {
-      Double.parseDouble(obj.toString());
+      String _string = obj.toString();
+      Double.parseDouble(_string);
     } catch (final Throwable _t) {
       if (_t instanceof Exception) {
         final Exception e = (Exception)_t;
@@ -622,22 +703,28 @@ public class PascalValidator extends AbstractPascalValidator {
       String _name_1 = const_.getName();
       Variable _variable = new Variable(_name_1);
       Variable variable = PascalValidator.<Variable>search(variables, _variable);
-      value = variable.getValue();
+      Object _value = variable.getValue();
+      value = _value;
     } else {
       number _number = const_.getNumber();
       boolean _notEquals_1 = (!Objects.equal(_number, null));
       if (_notEquals_1) {
-        value = PascalValidator.getValue(const_.getNumber());
+        number _number_1 = const_.getNumber();
+        Object _value_1 = PascalValidator.getValue(_number_1);
+        value = _value_1;
       } else {
         String _string = const_.getString();
         boolean _notEquals_2 = (!Objects.equal(_string, null));
         if (_notEquals_2) {
-          value = const_.getString();
+          String _string_1 = const_.getString();
+          value = _string_1;
         } else {
           String _boolLiteral = const_.getBoolLiteral();
           boolean _notEquals_3 = (!Objects.equal(_boolLiteral, null));
           if (_notEquals_3) {
-            value = Boolean.valueOf(const_.getBoolLiteral());
+            String _boolLiteral_1 = const_.getBoolLiteral();
+            Boolean _valueOf = Boolean.valueOf(_boolLiteral_1);
+            value = _valueOf;
           } else {
             String _nil = const_.getNil();
             boolean _notEquals_4 = (!Objects.equal(_nil, null));
@@ -653,12 +740,14 @@ public class PascalValidator extends AbstractPascalValidator {
     if (_notEquals_5) {
       if ((PascalValidator.isNumeric(value) && const_.getOpterator().equals("-"))) {
         try {
-          int _parseInt = Integer.parseInt(value.toString());
+          String _string_2 = value.toString();
+          int _parseInt = Integer.parseInt(_string_2);
           return Integer.valueOf((-_parseInt));
         } catch (final Throwable _t) {
           if (_t instanceof Exception) {
             final Exception e = (Exception)_t;
-            double _parseDouble = Double.parseDouble(value.toString());
+            String _string_3 = value.toString();
+            double _parseDouble = Double.parseDouble(_string_3);
             return Double.valueOf((-_parseDouble));
           } else {
             throw Exceptions.sneakyThrow(_t);
@@ -675,30 +764,42 @@ public class PascalValidator extends AbstractPascalValidator {
       block _block = decl.getBlock();
       boolean _equals = Objects.equal(_block, null);
       if (_equals) {
-        decl.setBlock(PascalPackage.eINSTANCE.getPascalFactory().createblock());
+        PascalFactory _pascalFactory = PascalPackage.eINSTANCE.getPascalFactory();
+        block _createblock = _pascalFactory.createblock();
+        decl.setBlock(_createblock);
       }
       block subblock = decl.getBlock();
-      _xblockexpression = container.get(subblock).add(element);
+      Set<T> _get = container.get(subblock);
+      _xblockexpression = _get.add(element);
     }
     return _xblockexpression;
   }
   
   public <T extends Element> void inheritElement(final block b, final T element, final Map<block, Set<T>> container) {
-    procedure_and_function_declaration_part _abstraction = b.getDeclaration().getAbstraction();
+    declaration_part _declaration = b.getDeclaration();
+    procedure_and_function_declaration_part _abstraction = _declaration.getAbstraction();
     boolean _notEquals = (!Objects.equal(_abstraction, null));
     if (_notEquals) {
-      EList<abstraction_heading> _procedures = b.getDeclaration().getAbstraction().getProcedures();
+      declaration_part _declaration_1 = b.getDeclaration();
+      procedure_and_function_declaration_part _abstraction_1 = _declaration_1.getAbstraction();
+      EList<abstraction_heading> _procedures = _abstraction_1.getProcedures();
       boolean _notEquals_1 = (!Objects.equal(_procedures, null));
       if (_notEquals_1) {
-        EList<abstraction_heading> _procedures_1 = b.getDeclaration().getAbstraction().getProcedures();
+        declaration_part _declaration_2 = b.getDeclaration();
+        procedure_and_function_declaration_part _abstraction_2 = _declaration_2.getAbstraction();
+        EList<abstraction_heading> _procedures_1 = _abstraction_2.getProcedures();
         for (final abstraction_declaration procedure : _procedures_1) {
           this.<T>addElementToAbstraction(procedure, element, container);
         }
       }
-      EList<abstraction_declaration> _functions = b.getDeclaration().getAbstraction().getFunctions();
+      declaration_part _declaration_3 = b.getDeclaration();
+      procedure_and_function_declaration_part _abstraction_3 = _declaration_3.getAbstraction();
+      EList<abstraction_declaration> _functions = _abstraction_3.getFunctions();
       boolean _notEquals_2 = (!Objects.equal(_functions, null));
       if (_notEquals_2) {
-        EList<abstraction_declaration> _functions_1 = b.getDeclaration().getAbstraction().getFunctions();
+        declaration_part _declaration_4 = b.getDeclaration();
+        procedure_and_function_declaration_part _abstraction_4 = _declaration_4.getAbstraction();
+        EList<abstraction_declaration> _functions_1 = _abstraction_4.getFunctions();
         for (final abstraction_declaration function : _functions_1) {
           this.<T>addElementToAbstraction(function, element, container);
         }
@@ -713,10 +814,13 @@ public class PascalValidator extends AbstractPascalValidator {
       boolean _equals = Objects.equal(container, this.types);
       if (_equals) {
         Type type = ((Type) element);
-        Type _searchByName = PascalValidator.searchByName(this.types.get(b), type);
-        elementFound = ((T) _searchByName);
+        Set<Type> _get = this.types.get(b);
+        Type _procuraPorNome = PascalValidator.procuraPorNome(_get, type);
+        elementFound = ((T) _procuraPorNome);
       } else {
-        elementFound = PascalValidator.<T>search(container.get(b), element);
+        Set<T> _get_1 = container.get(b);
+        T _search = PascalValidator.<T>search(_get_1, element);
+        elementFound = _search;
       }
       boolean _xifexpression = false;
       if (((!Objects.equal(elementFound, null)) && (!elementFound.isInherited()))) {
@@ -731,8 +835,9 @@ public class PascalValidator extends AbstractPascalValidator {
           if (_equals_2) {
             _xifexpression_2 = this.insertError(errorSection, "Identifier reserved for function return.", ErrorType.REDECLARATION, errorFeature);
           } else {
-            String _lowerCase = elementFound.type.toString().toLowerCase();
-            String _plus_1 = ("Identifier is already being used by a " + _lowerCase);
+            String _string = elementFound.type.toString();
+            String _lowerCase = _string.toLowerCase();
+            String _plus_1 = (this.IDENTIFIER_IS_ALREADY_BEING_USED + _lowerCase);
             String _plus_2 = (_plus_1 + ".");
             _xifexpression_2 = this.insertError(errorSection, _plus_2, ErrorType.REDECLARATION, errorFeature);
           }
@@ -741,7 +846,8 @@ public class PascalValidator extends AbstractPascalValidator {
         _xifexpression = _xifexpression_1;
       } else {
         this.removeError(errorSection, ErrorType.REDECLARATION);
-        container.get(b).add(element);
+        Set<T> _get_2 = container.get(b);
+        _get_2.add(element);
         Element _clone = element.clone();
         T inheritedElement = ((T) _clone);
         inheritedElement.inherited = true;
@@ -767,11 +873,14 @@ public class PascalValidator extends AbstractPascalValidator {
           boolean _notEquals_2 = (!Objects.equal(_variable, null));
           if (_notEquals_2) {
             variable_parameter_section variable = section.getVariable();
-            EList<String> _ids = variable.getIdentifiers().getIds();
+            identifier_list _identifiers = variable.getIdentifiers();
+            EList<String> _ids = _identifiers.getIds();
             for (final String varName : _ids) {
               {
-                Type _type = this.getType(b, section.getVariable().getType());
-                Variable parameter = new Variable(varName, _type, false, abstractionBlock, ElementType.PARAMETER);
+                variable_parameter_section _variable_1 = section.getVariable();
+                parameter_type _type = _variable_1.getType();
+                Type _type_1 = this.getType(b, _type);
+                Variable parameter = new Variable(varName, _type_1, false, abstractionBlock, ElementType.PARAMETER);
                 this.<Variable>addElement(b, parameter, this.variables, variable, PascalPackage.Literals.VARIABLE_PARAMETER_SECTION__IDENTIFIERS);
                 parameters.add(parameter);
               }
@@ -781,11 +890,13 @@ public class PascalValidator extends AbstractPascalValidator {
             boolean _notEquals_3 = (!Objects.equal(_value, null));
             if (_notEquals_3) {
               value_parameter_section value = section.getValue();
-              EList<String> _ids_1 = value.getIdentifiers().getIds();
+              identifier_list _identifiers_1 = value.getIdentifiers();
+              EList<String> _ids_1 = _identifiers_1.getIds();
               for (final String valName : _ids_1) {
                 {
-                  Type _type = this.getType(b, value.getType());
-                  Variable parameter = new Variable(valName, _type, false, abstractionBlock, ElementType.PARAMETER);
+                  parameter_type _type = value.getType();
+                  Type _type_1 = this.getType(b, _type);
+                  Variable parameter = new Variable(valName, _type_1, false, abstractionBlock, ElementType.PARAMETER);
                   this.<Variable>addElement(b, parameter, this.variables, value, PascalPackage.Literals.VALUE_PARAMETER_SECTION__IDENTIFIERS);
                   parameters.add(parameter);
                 }
@@ -805,10 +916,15 @@ public class PascalValidator extends AbstractPascalValidator {
       block _block = decl.getBlock();
       boolean _equals = Objects.equal(_block, null);
       if (_equals) {
-        decl.setBlock(PascalPackage.eINSTANCE.getPascalFactory().createblock());
+        PascalFactory _pascalFactory = PascalPackage.eINSTANCE.getPascalFactory();
+        block _createblock = _pascalFactory.createblock();
+        decl.setBlock(_createblock);
       }
-      this.<Variable>clear(decl.getBlock(), ElementType.PARAMETER, this.variables);
-      ArrayList<Variable> parameters = this.getParameters(decl.getBlock(), heading, decl.getBlock());
+      block _block_1 = decl.getBlock();
+      this.<Variable>clear(_block_1, ElementType.PARAMETER, this.variables);
+      block _block_2 = decl.getBlock();
+      block _block_3 = decl.getBlock();
+      ArrayList<Variable> parameters = this.getParameters(_block_2, heading, _block_3);
       boolean forward = decl.isForward();
       String returnType = heading.getResultType();
       Boolean _xifexpression = null;
@@ -827,17 +943,19 @@ public class PascalValidator extends AbstractPascalValidator {
           }
           Type _type_1 = this.getType(b, returnType);
           Function function = new Function(name, forward, b, decl, parameters, forward, _type_1);
-          this.<Procedure>addElement(b, function, this.abstractions, heading, PascalPackage.Literals.ABSTRACTION_HEADING__NAME);
+          this.<Procedure>addElement(b, function, this.abstracoes, heading, PascalPackage.Literals.ABSTRACTION_HEADING__NAME);
           Type _type_2 = this.getType(b, returnType);
-          block _block_1 = decl.getBlock();
-          Variable returnVariable = new Variable(name, _type_2, false, _block_1, ElementType.FUNCTION_RETURN);
+          block _block_4 = decl.getBlock();
+          Variable returnVariable = new Variable(name, _type_2, false, _block_4, ElementType.FUNCTION_RETURN);
           returnVariable.setOwningFunction(function);
-          _xblockexpression_1 = this.variables.get(decl.getBlock()).add(returnVariable);
+          block _block_5 = decl.getBlock();
+          Set<Variable> _get_1 = this.variables.get(_block_5);
+          _xblockexpression_1 = _get_1.add(returnVariable);
         }
         _xifexpression = Boolean.valueOf(_xblockexpression_1);
       } else {
         Procedure _procedure = new Procedure(name, forward, b, decl, parameters, forward);
-        _xifexpression = this.<Procedure>addElement(b, _procedure, this.abstractions, heading, PascalPackage.Literals.ABSTRACTION_HEADING__NAME);
+        _xifexpression = this.<Procedure>addElement(b, _procedure, this.abstracoes, heading, PascalPackage.Literals.ABSTRACTION_HEADING__NAME);
       }
       _xblockexpression = _xifexpression;
     }
@@ -845,18 +963,21 @@ public class PascalValidator extends AbstractPascalValidator {
   }
   
   public void checkAbstractionRedeclaration(final block b) {
-    procedure_and_function_declaration_part _abstraction = b.getDeclaration().getAbstraction();
+    declaration_part _declaration = b.getDeclaration();
+    procedure_and_function_declaration_part _abstraction = _declaration.getAbstraction();
     boolean _notEquals = (!Objects.equal(_abstraction, null));
     if (_notEquals) {
-      this.<Procedure>clear(b, ElementType.FUNCTION, this.abstractions);
-      this.<Procedure>clear(b, ElementType.PROCEDURE, this.abstractions);
-      procedure_and_function_declaration_part abstraction = b.getDeclaration().getAbstraction();
+      this.<Procedure>clear(b, ElementType.FUNCTION, this.abstracoes);
+      this.<Procedure>clear(b, ElementType.PROCEDURE, this.abstracoes);
+      declaration_part _declaration_1 = b.getDeclaration();
+      procedure_and_function_declaration_part abstraction = _declaration_1.getAbstraction();
       EList<abstraction_declaration> _functions = abstraction.getFunctions();
       boolean _notEquals_1 = (!Objects.equal(_functions, null));
       if (_notEquals_1) {
         EList<abstraction_declaration> _functions_1 = abstraction.getFunctions();
         for (final abstraction_declaration function : _functions_1) {
-          this.addAbstraction(b, function, function.getHeading());
+          abstraction_heading _heading = function.getHeading();
+          this.addAbstraction(b, function, _heading);
         }
       }
       EList<abstraction_heading> _procedures = abstraction.getProcedures();
@@ -864,7 +985,8 @@ public class PascalValidator extends AbstractPascalValidator {
       if (_notEquals_2) {
         EList<abstraction_heading> _procedures_1 = abstraction.getProcedures();
         for (final abstraction_declaration procedure : _procedures_1) {
-          this.addAbstraction(b, procedure, procedure.getHeading());
+          abstraction_heading _heading_1 = procedure.getHeading();
+          this.addAbstraction(b, procedure, _heading_1);
         }
       }
     }
@@ -872,29 +994,40 @@ public class PascalValidator extends AbstractPascalValidator {
   
   public void checkTypeRedeclaration(final block b) {
     this.<Type>clear(b, ElementType.TYPE, this.types);
-    type_definition_part _type_def = b.getDeclaration().getType_def();
+    declaration_part _declaration = b.getDeclaration();
+    type_definition_part _type_def = _declaration.getType_def();
     boolean _notEquals = (!Objects.equal(_type_def, null));
     if (_notEquals) {
-      EList<type_definition> _types = b.getDeclaration().getType_def().getTypes();
+      declaration_part _declaration_1 = b.getDeclaration();
+      type_definition_part _type_def_1 = _declaration_1.getType_def();
+      EList<type_definition> _types = _type_def_1.getTypes();
       for (final type_definition t : _types) {
         String _name = t.getName();
-        String _realType = this.getType(b, t.getType()).getRealType();
-        Type _type = new Type(_name, false, _realType);
-        this.<Type>addElement(b, _type, this.types, t, PascalPackage.Literals.TYPE_DEFINITION__NAME);
+        type _type = t.getType();
+        Type _type_1 = this.getType(b, _type);
+        String _realType = _type_1.getRealType();
+        Type _type_2 = new Type(_name, false, _realType);
+        this.<Type>addElement(b, _type_2, this.types, t, PascalPackage.Literals.TYPE_DEFINITION__NAME);
       }
     }
   }
   
   public void checkConstantRedeclaration(final block b) {
     this.<Variable>clear(b, ElementType.CONSTANT, this.variables);
-    constant_definition_part _constant_def = b.getDeclaration().getConstant_def();
+    declaration_part _declaration = b.getDeclaration();
+    constant_definition_part _constant_def = _declaration.getConstant_def();
     boolean _notEquals = (!Objects.equal(_constant_def, null));
     if (_notEquals) {
-      EList<constant_definition> _consts = b.getDeclaration().getConstant_def().getConsts();
+      declaration_part _declaration_1 = b.getDeclaration();
+      constant_definition_part _constant_def_1 = _declaration_1.getConstant_def();
+      EList<constant_definition> _consts = _constant_def_1.getConsts();
       for (final constant_definition const_ : _consts) {
         String _name = const_.getName();
-        Type _type = this.getType(b, const_.getConst());
-        Object _value = PascalValidator.getValue(const_.getConst(), this.variables.get(b));
+        constant _const = const_.getConst();
+        Type _type = this.getType(b, _const);
+        constant _const_1 = const_.getConst();
+        Set<Variable> _get = this.variables.get(b);
+        Object _value = PascalValidator.getValue(_const_1, _get);
         Variable _variable = new Variable(_name, _type, false, b, ElementType.CONSTANT, _value);
         this.<Variable>addElement(b, _variable, this.variables, const_, PascalPackage.Literals.CONSTANT_DEFINITION__NAME);
       }
@@ -903,15 +1036,20 @@ public class PascalValidator extends AbstractPascalValidator {
   
   public void checkVariableRedeclaration(final block b) {
     this.<Variable>clear(b, ElementType.VARIABLE, this.variables);
-    variable_declaration_part _variable_decl = b.getDeclaration().getVariable_decl();
+    declaration_part _declaration = b.getDeclaration();
+    variable_declaration_part _variable_decl = _declaration.getVariable_decl();
     boolean _notEquals = (!Objects.equal(_variable_decl, null));
     if (_notEquals) {
-      EList<variable_section> _sections = b.getDeclaration().getVariable_decl().getSections();
+      declaration_part _declaration_1 = b.getDeclaration();
+      variable_declaration_part _variable_decl_1 = _declaration_1.getVariable_decl();
+      EList<variable_section> _sections = _variable_decl_1.getSections();
       for (final variable_section section : _sections) {
-        EList<String> _names = section.getIdentifiers().getNames();
+        variable_identifier_list _identifiers = section.getIdentifiers();
+        EList<String> _names = _identifiers.getNames();
         for (final String name : _names) {
           {
-            Type type = this.getType(b, section.getType());
+            type _type = section.getType();
+            Type type = this.getType(b, _type);
             Variable _variable = new Variable(name, type, false, b, ElementType.VARIABLE);
             this.<Variable>addElement(b, _variable, this.variables, section, PascalPackage.Literals.VARIABLE_SECTION__IDENTIFIERS);
           }
@@ -933,14 +1071,14 @@ public class PascalValidator extends AbstractPascalValidator {
     boolean _equals_1 = Objects.equal(searchVariable, null);
     if (_equals_1) {
       isValid = false;
-      this.insertError(v, "Variable was not declared.", ErrorType.NOT_DECLARATION, PascalPackage.Literals.VARIABLE__NAME);
+      this.insertError(v, this.VARIABLE_WAS_NOT_DECLARED, ErrorType.NOT_DECLARATION, PascalPackage.Literals.VARIABLE__NAME);
     } else {
       this.removeError(v, ErrorType.NOT_DECLARATION);
       if (isAssignment) {
         boolean _equals_2 = Objects.equal(searchVariable.type, ElementType.CONSTANT);
         if (_equals_2) {
           isValid = false;
-          this.insertError(v, "Constants cannot be assigned.", ErrorType.CONSTANT_ASSIGNMENT, PascalPackage.Literals.VARIABLE__NAME);
+          this.insertError(v, this.CONSTANTS_CANNOT_BE_ASSIGNED, ErrorType.CONSTANT_ASSIGNMENT, PascalPackage.Literals.VARIABLE__NAME);
         } else {
           this.removeError(v, ErrorType.CONSTANT_ASSIGNMENT);
         }
@@ -950,19 +1088,22 @@ public class PascalValidator extends AbstractPascalValidator {
   }
   
   public void checkAbstraction(final block b, final Procedure proc, final boolean functionOnly, final EObject object, final EStructuralFeature feature) {
-    Procedure abstractionFound = PascalValidator.searchWithTypeCoersion(this.abstractions.get(b), proc);
+    Set<Procedure> _get = this.abstracoes.get(b);
+    Procedure abstractionFound = PascalValidator.searchWithTypeCoersion(_get, proc);
     boolean _equals = Objects.equal(abstractionFound, null);
     if (_equals) {
-      Set<Procedure> _get = this.abstractions.get(b);
-      for (final Procedure p : _get) {
-        boolean _equals_1 = p.name.toLowerCase().equals(proc.name.toLowerCase());
+      Set<Procedure> _get_1 = this.abstracoes.get(b);
+      for (final Procedure p : _get_1) {
+        String _lowerCase = p.name.toLowerCase();
+        String _lowerCase_1 = proc.name.toLowerCase();
+        boolean _equals_1 = _lowerCase.equals(_lowerCase_1);
         if (_equals_1) {
           int _size = p.parameters.size();
           int _size_1 = proc.parameters.size();
           boolean _notEquals = (_size != _size_1);
           if (_notEquals) {
             int _size_2 = p.parameters.size();
-            String _plus = ("Wrong number of arguments. It expected " + Integer.valueOf(_size_2));
+            String _plus = (this.WRONG_NUMBER_OF_ARGUMENTS + Integer.valueOf(_size_2));
             String _plus_1 = (_plus + " received ");
             int _size_3 = proc.parameters.size();
             String _plus_2 = (_plus_1 + Integer.valueOf(_size_3));
@@ -975,7 +1116,9 @@ public class PascalValidator extends AbstractPascalValidator {
               {
                 Variable type1 = it1.next();
                 Variable type2 = it2.next();
-                boolean _areTypesCompatibles = TypeInferer.areTypesCompatibles(type1.getVarType(), type2.getVarType());
+                Type _varType = type1.getVarType();
+                Type _varType_1 = type2.getVarType();
+                boolean _areTypesCompatibles = TypeInferer.areTypesCompatibles(_varType, _varType_1);
                 boolean _not = (!_areTypesCompatibles);
                 if (_not) {
                   this.insertError(object, (((("Incompatible types of arguments. It expected " + p.parameters) + " received ") + proc.parameters) + "."), ErrorType.NOT_DECLARATION, feature);
@@ -987,7 +1130,7 @@ public class PascalValidator extends AbstractPascalValidator {
           return;
         }
       }
-      this.insertError(object, "Function was not declared.", ErrorType.NOT_DECLARATION, feature);
+      this.insertError(object, this.FUNCTION_WAS_NOT_DECLARED, ErrorType.NOT_DECLARATION, feature);
     } else {
       this.removeError(object, ErrorType.NOT_DECLARATION);
       if ((Objects.equal(abstractionFound.type, ElementType.PROCEDURE) && functionOnly)) {
@@ -1002,25 +1145,29 @@ public class PascalValidator extends AbstractPascalValidator {
     expression_list _expressions = function.getExpressions();
     boolean _notEquals = (!Objects.equal(_expressions, null));
     if (_notEquals) {
-      EList<expression> _expressions_1 = function.getExpressions().getExpressions();
-      for (final expression e : _expressions_1) {
+      expression_list _expressions_1 = function.getExpressions();
+      EList<expression> _expressions_2 = _expressions_1.getExpressions();
+      for (final expression e : _expressions_2) {
         this.checkExpression(b, e);
       }
     }
-    this.checkAbstraction(b, this.getAbstraction(b, function), functionOnly, function, PascalPackage.Literals.FUNCTION_DESIGNATOR__NAME);
+    Procedure _abstraction = this.getAbstraction(b, function);
+    this.checkAbstraction(b, _abstraction, functionOnly, function, PascalPackage.Literals.FUNCTION_DESIGNATOR__NAME);
   }
   
   public void checkFactor(final block b, final factor f) {
     variable _variable = f.getVariable();
     boolean _notEquals = (!Objects.equal(_variable, null));
     if (_notEquals) {
-      this.checkVariable(b, f.getVariable(), false);
+      variable _variable_1 = f.getVariable();
+      this.checkVariable(b, _variable_1, false);
       boolean _containsKey = this.variables.containsKey(b);
       if (_containsKey) {
         Set<Variable> _get = this.variables.get(b);
-        String _name = f.getVariable().getName();
-        Variable _variable_1 = new Variable(_name);
-        Variable v = PascalValidator.<Variable>search(_get, _variable_1);
+        variable _variable_2 = f.getVariable();
+        String _name = _variable_2.getName();
+        Variable _variable_3 = new Variable(_name);
+        Variable v = PascalValidator.<Variable>search(_get, _variable_3);
         if (((!Objects.equal(v, null)) && Objects.equal(v.getValue(), null))) {
           this.insertError(f, "Variable not initialized.", ErrorType.NOT_INITIALIZED, PascalPackage.Literals.FACTOR__VARIABLE);
         } else {
@@ -1031,27 +1178,35 @@ public class PascalValidator extends AbstractPascalValidator {
       function_designator _function = f.getFunction();
       boolean _notEquals_1 = (!Objects.equal(_function, null));
       if (_notEquals_1) {
-        this.checkAbstractionCall(b, f.getFunction(), true);
+        function_designator _function_1 = f.getFunction();
+        this.checkAbstractionCall(b, _function_1, true);
       } else {
         factor _not = f.getNot();
         boolean _notEquals_2 = (!Objects.equal(_not, null));
         if (_notEquals_2) {
-          boolean _equals = this.getType(b, f.getNot()).getRealType().toLowerCase().equals(this.BOOLEAN);
-          boolean _not_1 = (!_equals);
-          if (_not_1) {
-            Type _type = this.getType(b, f.getNot());
-            String _plus = (this.CANNOT_CONVERT_MESSAGE + _type);
+          factor _not_1 = f.getNot();
+          Type _type = this.getType(b, _not_1);
+          String _realType = _type.getRealType();
+          String _lowerCase = _realType.toLowerCase();
+          boolean _equals = _lowerCase.equals(this.BOOLEAN);
+          boolean _not_2 = (!_equals);
+          if (_not_2) {
+            factor _not_3 = f.getNot();
+            Type _type_1 = this.getType(b, _not_3);
+            String _plus = (this.CANNOT_CONVERT_MESSAGE + _type_1);
             String _plus_1 = (_plus + " to boolean.");
             this.insertError(f, _plus_1, ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.FACTOR__NOT);
           } else {
             this.removeError(f, ErrorType.TYPE_CONVERSION_ERROR);
           }
-          this.checkFactor(b, f.getNot());
+          factor _not_4 = f.getNot();
+          this.checkFactor(b, _not_4);
         } else {
           expression _expression = f.getExpression();
           boolean _notEquals_3 = (!Objects.equal(_expression, null));
           if (_notEquals_3) {
-            this.checkExpression(b, f.getExpression());
+            expression _expression_1 = f.getExpression();
+            this.checkExpression(b, _expression_1);
           }
         }
       }
@@ -1066,14 +1221,15 @@ public class PascalValidator extends AbstractPascalValidator {
     if (_notEquals) {
       EList<String> _operators_1 = t.getOperators();
       for (final String op : _operators_1) {
-        boolean _equals = op.toLowerCase().equals("and");
+        String _lowerCase = op.toLowerCase();
+        boolean _equals = _lowerCase.equals("and");
         if (_equals) {
           isBoolean = true;
         } else {
           if ((!isBoolean)) {
             isNumeric = true;
           } else {
-            this.insertError(t, "Invalid operator for boolean.", ErrorType.INVALID_OPERATOR, PascalPackage.Literals.TERM__OPERATORS);
+            this.insertError(t, this.INVALID_OPERATOR_FOR_BOOLEAN, ErrorType.INVALID_OPERATOR, PascalPackage.Literals.TERM__OPERATORS);
             return;
           }
         }
@@ -1084,11 +1240,14 @@ public class PascalValidator extends AbstractPascalValidator {
     for (final factor f : _factors) {
       {
         if (isBoolean) {
-          boolean _equals_1 = this.getType(b, f).getRealType().toLowerCase().equals(this.BOOLEAN);
+          Type _type = this.getType(b, f);
+          String _realType = _type.getRealType();
+          String _lowerCase_1 = _realType.toLowerCase();
+          boolean _equals_1 = _lowerCase_1.equals(this.BOOLEAN);
           boolean _not = (!_equals_1);
           if (_not) {
-            Type _type = this.getType(b, f);
-            String _plus = (this.CANNOT_CONVERT_MESSAGE + _type);
+            Type _type_1 = this.getType(b, f);
+            String _plus = (this.CANNOT_CONVERT_MESSAGE + _type_1);
             String _plus_1 = (_plus + " to boolean.");
             this.insertError(t, _plus_1, ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.TERM__FACTORS);
           } else {
@@ -1096,11 +1255,12 @@ public class PascalValidator extends AbstractPascalValidator {
           }
         } else {
           if (isNumeric) {
-            int _typeWeight = TypeInferer.getTypeWeight(this.getType(b, f));
+            Type _type_2 = this.getType(b, f);
+            int _typeWeight = TypeInferer.getTypeWeight(_type_2);
             boolean _equals_2 = (_typeWeight == (-1));
             if (_equals_2) {
-              Type _type_1 = this.getType(b, f);
-              String _plus_2 = (this.CANNOT_CONVERT_MESSAGE + _type_1);
+              Type _type_3 = this.getType(b, f);
+              String _plus_2 = (this.CANNOT_CONVERT_MESSAGE + _type_3);
               String _plus_3 = (_plus_2 + " to numeric.");
               this.insertError(t, _plus_3, ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.TERM__FACTORS);
             } else {
@@ -1129,14 +1289,15 @@ public class PascalValidator extends AbstractPascalValidator {
         if (_notEquals_1) {
           EList<String> _operators_1 = s.getOperators();
           for (final String op : _operators_1) {
-            boolean _equals = op.toLowerCase().equals("or");
+            String _lowerCase = op.toLowerCase();
+            boolean _equals = _lowerCase.equals("or");
             if (_equals) {
               isBoolean = true;
             } else {
               if ((!isBoolean)) {
                 isNumeric = true;
               } else {
-                this.insertError(s, "Invalid operator for boolean.", ErrorType.INVALID_OPERATOR, PascalPackage.Literals.SIMPLE_EXPRESSION__OPERATORS);
+                this.insertError(s, this.INVALID_OPERATOR_FOR_BOOLEAN, ErrorType.INVALID_OPERATOR, PascalPackage.Literals.SIMPLE_EXPRESSION__OPERATORS);
                 return;
               }
             }
@@ -1151,11 +1312,14 @@ public class PascalValidator extends AbstractPascalValidator {
             if ((obj instanceof term)) {
               term t = ((term) obj);
               if (isBoolean) {
-                boolean _equals_1 = this.getType(b, t).getRealType().toLowerCase().equals(this.BOOLEAN);
+                Type _type = this.getType(b, t);
+                String _realType = _type.getRealType();
+                String _lowerCase_1 = _realType.toLowerCase();
+                boolean _equals_1 = _lowerCase_1.equals(this.BOOLEAN);
                 boolean _not = (!_equals_1);
                 if (_not) {
-                  Type _type = this.getType(b, t);
-                  String _plus = (this.CANNOT_CONVERT_MESSAGE + _type);
+                  Type _type_1 = this.getType(b, t);
+                  String _plus = (this.CANNOT_CONVERT_MESSAGE + _type_1);
                   String _plus_1 = (_plus + " to boolean.");
                   this.insertError(s, _plus_1, ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.SIMPLE_EXPRESSION__TERMS);
                 } else {
@@ -1163,11 +1327,12 @@ public class PascalValidator extends AbstractPascalValidator {
                 }
               } else {
                 if (isNumeric) {
-                  int _typeWeight = TypeInferer.getTypeWeight(this.getType(b, t));
+                  Type _type_2 = this.getType(b, t);
+                  int _typeWeight = TypeInferer.getTypeWeight(_type_2);
                   boolean _equals_2 = (_typeWeight == (-1));
                   if (_equals_2) {
-                    Type _type_1 = this.getType(b, t);
-                    String _plus_2 = (this.CANNOT_CONVERT_MESSAGE + _type_1);
+                    Type _type_3 = this.getType(b, t);
+                    String _plus_2 = (this.CANNOT_CONVERT_MESSAGE + _type_3);
                     String _plus_3 = (_plus_2 + " to numeric.");
                     this.insertError(s, _plus_3, ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.SIMPLE_EXPRESSION__TERMS);
                   } else {
@@ -1210,13 +1375,13 @@ public class PascalValidator extends AbstractPascalValidator {
             this.removeError(const_, ErrorType.NOT_DECLARATION);
             boolean _notEquals_1 = (!Objects.equal(searchVariable.type, ElementType.CONSTANT));
             if (_notEquals_1) {
-              this.insertError(const_, "Only constants are allowed.", ErrorType.CONSTANT_ONLY, PascalPackage.Literals.CONSTANT__NAME);
+              this.insertError(const_, this.ONLY_CONSTANTS_ARE_ALLOWED, ErrorType.CONSTANT_ONLY, PascalPackage.Literals.CONSTANT__NAME);
             } else {
               this.removeError(const_, ErrorType.CONSTANT_ONLY);
             }
             boolean _xifexpression_2 = false;
             if (((!Objects.equal(const_.getOpterator(), null)) && (TypeInferer.getTypeWeight(searchVariable.getVarType()) < 0))) {
-              _xifexpression_2 = this.insertError(const_, "Variable is not a number.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.CONSTANT__NAME);
+              _xifexpression_2 = this.insertError(const_, this.VARIABLE_IS_NOT_A_NUMBER, ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.CONSTANT__NAME);
             } else {
               this.removeError(const_, ErrorType.TYPE_CONVERSION_ERROR);
             }
@@ -1239,22 +1404,34 @@ public class PascalValidator extends AbstractPascalValidator {
       assignment_statement _assignment = simple.getAssignment();
       boolean _notEquals_1 = (!Objects.equal(_assignment, null));
       if (_notEquals_1) {
-        boolean _checkVariable = this.checkVariable(b, simple.getAssignment().getVariable(), true);
+        assignment_statement _assignment_1 = simple.getAssignment();
+        variable _variable = _assignment_1.getVariable();
+        boolean _checkVariable = this.checkVariable(b, _variable, true);
         if (_checkVariable) {
-          Type variableType = this.getType(b, simple.getAssignment().getVariable());
-          Type expressionType = this.getType(b, simple.getAssignment().getExpression());
+          assignment_statement _assignment_2 = simple.getAssignment();
+          variable _variable_1 = _assignment_2.getVariable();
+          Type variableType = this.getType(b, _variable_1);
+          assignment_statement _assignment_3 = simple.getAssignment();
+          expression _expression = _assignment_3.getExpression();
+          Type expressionType = this.getType(b, _expression);
           boolean _areTypesCompatibles = TypeInferer.areTypesCompatibles(variableType, expressionType);
           boolean _not = (!_areTypesCompatibles);
           if (_not) {
-            this.insertError(simple.getAssignment(), (((("Cannot convert type " + expressionType) + this.TO_MESSAGE) + variableType) + "."), ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.ASSIGNMENT_STATEMENT__EXPRESSION);
+            assignment_statement _assignment_4 = simple.getAssignment();
+            this.insertError(_assignment_4, ((((this.CANNOT_CONVERT_TYPE + expressionType) + " to ") + variableType) + "."), ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.ASSIGNMENT_STATEMENT__EXPRESSION);
           } else {
-            this.removeError(simple.getAssignment(), ErrorType.TYPE_CONVERSION_ERROR);
+            assignment_statement _assignment_5 = simple.getAssignment();
+            this.removeError(_assignment_5, ErrorType.TYPE_CONVERSION_ERROR);
           }
-          this.checkExpression(b, simple.getAssignment().getExpression());
+          assignment_statement _assignment_6 = simple.getAssignment();
+          expression _expression_1 = _assignment_6.getExpression();
+          this.checkExpression(b, _expression_1);
           Set<Variable> _get = this.variables.get(b);
-          String _name = simple.getAssignment().getVariable().getName();
-          Variable _variable = new Variable(_name);
-          Variable v = PascalValidator.<Variable>search(_get, _variable);
+          assignment_statement _assignment_7 = simple.getAssignment();
+          variable _variable_2 = _assignment_7.getVariable();
+          String _name = _variable_2.getName();
+          Variable _variable_3 = new Variable(_name);
+          Variable v = PascalValidator.<Variable>search(_get, _variable_3);
           boolean _notEquals_2 = (!Objects.equal(v, null));
           if (_notEquals_2) {
             v.setValue(Integer.valueOf(0));
@@ -1264,35 +1441,51 @@ public class PascalValidator extends AbstractPascalValidator {
         function_designator _function = simple.getFunction();
         boolean _notEquals_3 = (!Objects.equal(_function, null));
         if (_notEquals_3) {
-          this.checkAbstractionCall(b, simple.getFunction(), false);
+          function_designator _function_1 = simple.getFunction();
+          this.checkAbstractionCall(b, _function_1, false);
+        } else {
+          String _function_noargs = simple.getFunction_noargs();
+          boolean _notEquals_4 = (!Objects.equal(_function_noargs, null));
+          if (_notEquals_4) {
+            Set<Procedure> _get_1 = this.abstracoes.get(b);
+            String _function_noargs_1 = simple.getFunction_noargs();
+            ArrayList<Variable> _arrayList = new ArrayList<Variable>();
+            Procedure _procedure = new Procedure(_function_noargs_1, _arrayList);
+            Procedure _search = PascalValidator.<Procedure>search(_get_1, _procedure);
+            boolean _notEquals_5 = (!Objects.equal(_search, null));
+            if (_notEquals_5) {
+              this.removeError(simple, ErrorType.NOT_DECLARATION);
+            } else {
+              this.insertError(simple, this.PROCEDURE_WAS_NOT_DECLARED, ErrorType.NOT_DECLARATION, PascalPackage.Literals.SIMPLE_STATEMENT__FUNCTION_NOARGS);
+            }
+          }
         }
       }
     } else {
       structured_statement _structured = stmt.getStructured();
-      boolean _notEquals_4 = (!Objects.equal(_structured, null));
-      if (_notEquals_4) {
+      boolean _notEquals_6 = (!Objects.equal(_structured, null));
+      if (_notEquals_6) {
         structured_statement structured = stmt.getStructured();
-        conditional_statement _conditional = structured.getConditional();
-        boolean _notEquals_5 = (!Objects.equal(_conditional, null));
-        if (_notEquals_5) {
-          conditional_statement conditional = structured.getConditional();
-          if_statement _ifStmt = conditional.getIfStmt();
-          boolean _notEquals_6 = (!Objects.equal(_ifStmt, null));
-          if (_notEquals_6) {
-            if_statement ifStmt = conditional.getIfStmt();
-            this.checkExpression(b, ifStmt.getExpression());
-            boolean _equals = this.getType(b, ifStmt.getExpression()).getRealType().toLowerCase().equals(this.BOOLEAN);
-            boolean _not_1 = (!_equals);
-            if (_not_1) {
-              this.insertError(ifStmt, "Only booleans are allowed inside a condition.", ErrorType.TYPE_CONVERSION_ERROR, PascalPackage.Literals.IF_STATEMENT__EXPRESSION);
-            } else {
-              this.removeError(ifStmt.getExpression(), ErrorType.TYPE_CONVERSION_ERROR);
-            }
-            this.checkStatement(b, ifStmt.getIfStatement());
-            statement _elseStatement = ifStmt.getElseStatement();
-            boolean _notEquals_7 = (!Objects.equal(_elseStatement, null));
-            if (_notEquals_7) {
-              this.checkStatement(b, ifStmt.getElseStatement());
+        compound_statement _compound = structured.getCompound();
+        boolean _notEquals_7 = (!Objects.equal(_compound, null));
+        if (_notEquals_7) {
+          compound_statement compound = structured.getCompound();
+          statement_sequence _sequence = compound.getSequence();
+          this.checkStatements(b, _sequence);
+        } else {
+          repetitive_statement _repetitive = structured.getRepetitive();
+          boolean _notEquals_8 = (!Objects.equal(_repetitive, null));
+          if (_notEquals_8) {
+            repetitive_statement repetitive = structured.getRepetitive();
+            repeat_statement _repeat = repetitive.getRepeat();
+            boolean _notEquals_9 = (!Objects.equal(_repeat, null));
+            if (_notEquals_9) {
+              repeat_statement _repeat_1 = repetitive.getRepeat();
+              statement_sequence _sequence_1 = _repeat_1.getSequence();
+              this.checkStatements(b, _sequence_1);
+              repeat_statement _repeat_2 = repetitive.getRepeat();
+              expression _expression_2 = _repeat_2.getExpression();
+              this.checkExpression(b, _expression_2);
             }
           }
         }
@@ -1308,14 +1501,17 @@ public class PascalValidator extends AbstractPascalValidator {
   }
   
   public void checkBlock(final block b) {
-    this.checkStatements(b, b.getStatement().getSequence());
+    statement_part _statement = b.getStatement();
+    statement_sequence _sequence = _statement.getSequence();
+    this.checkStatements(b, _sequence);
   }
   
   @Check
   public Object preencherTabela(final program prog) {
     Object _xblockexpression = null;
     {
-      String name = prog.getHeading().getName();
+      program_heading _heading = prog.getHeading();
+      String name = _heading.getName();
       Object _xifexpression = null;
       boolean _containsKey = PascalValidator.tabela_de_simbolos.containsKey(name);
       boolean _not = (!_containsKey);
@@ -1324,10 +1520,14 @@ public class PascalValidator extends AbstractPascalValidator {
         {
           HashMap<String, Object> _hashMap = new HashMap<String, Object>();
           PascalValidator.tabela_de_simbolos.put(name, _hashMap);
-          PascalValidator.tabela_de_simbolos.get(name).put("variables", this.variables);
-          PascalValidator.tabela_de_simbolos.get(name).put("abstractions", this.abstractions);
-          PascalValidator.tabela_de_simbolos.get(name).put("types", this.types);
-          _xblockexpression_1 = PascalValidator.tabela_de_simbolos.get(name).put("calculatedTypes", this.calculatedTypes);
+          Map<String, Object> _get = PascalValidator.tabela_de_simbolos.get(name);
+          _get.put("variables", this.variables);
+          Map<String, Object> _get_1 = PascalValidator.tabela_de_simbolos.get(name);
+          _get_1.put("abstractions", this.abstracoes);
+          Map<String, Object> _get_2 = PascalValidator.tabela_de_simbolos.get(name);
+          _get_2.put("types", this.types);
+          Map<String, Object> _get_3 = PascalValidator.tabela_de_simbolos.get(name);
+          _xblockexpression_1 = _get_3.put("calculatedTypes", this.calculatedTypes);
         }
         _xifexpression = _xblockexpression_1;
       }
@@ -1347,11 +1547,13 @@ public class PascalValidator extends AbstractPascalValidator {
   
   @Check
   public void showError(final EObject obj) {
-    boolean _containsKey = this.errorList.containsKey(obj);
+    boolean _containsKey = this.ListaDeErros.containsKey(obj);
     if (_containsKey) {
-      Set<org.xtext.ufcg.compiladores.validation.Error> _get = this.errorList.get(obj);
+      Set<org.xtext.ufcg.compiladores.validation.Error> _get = this.ListaDeErros.get(obj);
       for (final org.xtext.ufcg.compiladores.validation.Error err : _get) {
-        this.error(err.getMessage(), obj, err.getFeature(), (-1));
+        String _message = err.getMessage();
+        EStructuralFeature _feature = err.getFeature();
+        this.error(_message, obj, _feature, (-1));
       }
     }
   }

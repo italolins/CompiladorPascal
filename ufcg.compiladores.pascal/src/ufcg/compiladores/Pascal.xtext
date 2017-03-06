@@ -2,13 +2,15 @@ grammar org.xtext.ufcg.compiladores.Pascal with org.eclipse.xtext.common.Termina
 
 generate pascal "http://www.xtext.org/ufcg/compiladores/Pascal"
 
-//Programs and Blocks
+//===============================================
+//===          Programs and Blocks            ===
+//===============================================
 
 program:
 	heading=program_heading block=block "." 
 ;
 
-program_heading: //Pelo que vi de programas pascal, (identifier_list) é opcional.
+program_heading: 
 	"program" name=ID ("(" identifiers=identifier_list ")")? ";"	
 ;
 
@@ -68,7 +70,9 @@ statement_part:
 	"begin" sequence=statement_sequence "end"	
 ;
 
-// Procedures and Function Definitions
+//=============================================
+//=== Procedures and Function Definitions   ===
+//=============================================
 
 procedure_heading returns abstraction_heading: 
 	"procedure" name=ID (parameters=formal_parameter_list)?	
@@ -132,6 +136,7 @@ simple_statement:
 		assignment=assignment_statement 
 		| function=function_designator 
 		| goto=goto_statement
+		| function_noargs=ID
 	)?	
 ;
 
@@ -146,12 +151,12 @@ goto_statement:
 structured_statement: 
 	compound=compound_statement
 	| repetitive=repetitive_statement
-	| conditional=conditional_statement // Para o escopo, somento condicional funciona
+	| conditional=conditional_statement
 	| with_stt=with_statement
 ;
 
 compound_statement:
-	"begin" stmt_seq=statement_sequence "end"
+	"begin" sequence=statement_sequence "end"
 ;
 
 repetitive_statement:
@@ -165,7 +170,7 @@ while_statement:
 ;
 
 repeat_statement:
-	"repeat" stmt_seq=statement_sequence "until" expression=expression
+	"repeat" sequence=statement_sequence "until" expression=expression
 ;
 
 for_statement:
@@ -173,7 +178,7 @@ for_statement:
 ;
 
 conditional_statement: 
-	ifStmt=if_statement // Para o escopo, somente if then else
+	ifStmt=if_statement
 ;
 
 if_statement:
@@ -183,8 +188,9 @@ if_statement:
 with_statement:
 	"with" record=ID ("," records+=ID)* "do" stmt=statement
 ;
-
-// Expressions
+//=======================================
+//===          Expressions            ===
+//=======================================
 
 expression:
 	expressions+=simple_expression (
@@ -311,7 +317,9 @@ pointer_type:
 	"^" type=type
 ; 
 
-// Record Fields
+//==============================
+//===      Record Fields     ===
+//==============================
 
 field_list:
 	(fixed=fixed_part (";" variants+=variant_part )? | variants+=variant_part) (";")? 
@@ -344,7 +352,9 @@ variant:
 // Variable and Identifier Categories
 // Quase todas podem utilizar o modelo default ID, as que nao ja estao dentro de outras regras
 
-// Low Level Definitions
+//=====================================
+//===     Low Level Definitions     ===
+//=====================================
 
 variable_identifier_list:
 	names+=ID ("," names+=ID)*

@@ -156,6 +156,7 @@
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="goto" eType="#//goto_statement"
         containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="function_noargs" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="assignment_statement">
     <eStructuralFeatures xsi:type="ecore:EReference" name="variable" eType="#//variable"
@@ -178,7 +179,7 @@
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="compound_statement">
-    <eStructuralFeatures xsi:type="ecore:EReference" name="stmt_seq" eType="#//statement_sequence"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="sequence" eType="#//statement_sequence"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="repetitive_statement">
@@ -196,7 +197,7 @@
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="repeat_statement">
-    <eStructuralFeatures xsi:type="ecore:EReference" name="stmt_seq" eType="#//statement_sequence"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="sequence" eType="#//statement_sequence"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="expression" eType="#//expression"
         containment="true"/>
